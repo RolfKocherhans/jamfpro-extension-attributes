@@ -1,0 +1,78 @@
+#!/bin/bash
+
+#############################################
+# Copyright rolf.kocherhans@gmail.com       #
+# version: 0.8 date: 14.4.2020              #
+#############################################
+
+
+###############################################
+# This script checks for the Tivoli Starage   #
+# Manager log file. If found, it tries to     #
+# extract the last backup date, compares it   #
+# with the actual date and reports the days   #
+# passed. It then displays the result as an   #
+# extension attribute.                        #
+###############################################
+
+
+# set path for reversed log file
+varReversedFilePath="/Library/Preferences/Tivoli Storage Manager/dsmsched_reversed.log"
+varToday=$(date +"%d-%m-%Y")
+
+# check if log file is present and if yes, check language
+if [ -f /Library/Preferences/Tivoli\ Storage\ Manager/dsmsched.log ]; then
+    
+    # read log file, reverse it, and put content into a variable
+    varReversed_DsmschedLog=$(tail -r "/Library/Preferences/Tivoli Storage Manager/dsmsched.log")
+    
+    # save reversed log variable to disk
+    # done because awk can not work with variables only with files
+    printf "%s" "$varReversed_DsmschedLog" > "$varReversedFilePath"
+    
+    # extract last backup progress from file in both languages
+    varOneDayLogGerman=$(awk '/--- ANFANG DER PLANUNGSPROTOKOLLABFRAGE/{a=1};a;/--- ANFANG DES PLANUNGSPROTOKOLLSTATUS/{exit}' "/Library/Preferences/Tivoli Storage Manager/dsmsched_reversed.log")
+    varOneDayLogEnglish=$(awk '/--- SCHEDULEREC QUERY BEGIN/{a=1};a;/--- SCHEDULEREC STATUS BEGIN/{exit}' "/Library/Preferences/Tivoli Storage Manager/dsmsched_reversed.log")
+    
+    # act according to the language found in the log file
+    # ---------------------------------------------------------------------------------------------------------------
+    # $varOneDayLogGerman is not empty so we found a german log entry
+    if [ "$varOneDayLogGerman" ]; then
+      varBackUpDate=$(echo "$varOneDayLogGerman" | grep -e "--- ENDE DES PLANUNGSPROTOKOLLSTATUS" | awk '{ print $1 }')
+    fi
+    # ---------------------------------------------------------------------------------------------------------------
+    # $varOneDayLogEnglish is not empty so we found an english log entry
+    if [ "$varOneDayLogEnglish" ]; then
+     varBackUpDate=$(echo "$varOneDayLogEnglish" | grep -e "--- SCHEDULEREC STATUS END" | awk '{ print $1 }')
+    fi
+    # ---------------------------------------------------------------------------------------------------------------
+    
+    # calculate days sinde last successful backup
+    varDaysSinceLastBackup=$(((`date -jf "%d-%m-%Y" "$varToday" +%s` - `date -jf "%d-%m-%Y" "$varBackUpDate" +%s`)/86400))
+    
+    
+    
+    # Pass the variable in string 
+    case "$varDaysSinceLastBackup" in 
+        #case 1 
+        "0") echo "<result>"Heute"</result>" ;; 
+        
+        #case 2 
+        "1") echo "<result>"Gestern"</result>" ;; 
+        
+        #case 3 
+        "2") echo "<result>"Vorgestern"</result>" ;;
+        
+        #case 3 
+        *) echo "<result>"$varDaysSinceLastBackup"</result>" ;; 
+    esac 
+    
+    
+    
+    
+else
+    echo "<result>"IBM SP: Kein Log"</result>"
+fi
+
+exit 0
+
