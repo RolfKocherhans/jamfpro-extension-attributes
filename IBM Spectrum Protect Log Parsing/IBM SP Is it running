@@ -1,0 +1,26 @@
+#!/bin/bash
+
+#############################################
+# Copyright rolf.kocherhans@gmail.com       #
+# version: 0.6 date: 14.4.2020              #
+#############################################
+
+
+###############################################
+# This script checks for the Tivoli Starage   #
+# Manager process dsmcad. If it is present    #
+# then Spectrum Protect is running.           #
+###############################################
+
+
+# chek for process dsmcad
+process="dsmcad"
+
+if [ "$(pgrep "$process")" ]; then
+    echo "<result>""IBM SP: Aktiv""</result>"
+else
+    echo "<result>""IBM SP: Läuft nicht""</result>"
+fi
+
+exit 0
+
