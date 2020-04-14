@@ -1,0 +1,79 @@
+#!/bin/bash
+
+#############################################
+# Copyright rolf.kocherhans@gmail.com       #
+# version: 1.4 date: 14.4.2020              #
+#############################################
+
+
+###############################################
+# This script checks for the Tivoli Starage   #
+# Manager log file. If found, it tries to     #
+# extract some values and put them into a Jamf#
+# Pro extension attribute.                    #
+###############################################
+
+# set path for reversed log file
+varReversedFilePath="/Library/Preferences/Tivoli Storage Manager/dsmsched_reversed.log"
+
+
+# check if log file is present and if yes, check language
+if [ -f /Library/Preferences/Tivoli\ Storage\ Manager/dsmsched.log ]; then
+    
+    # read log file, reverse it, and put content into a variable
+    varReversed_DsmschedLog=$(tail -r "/Library/Preferences/Tivoli Storage Manager/dsmsched.log")
+    
+    # save reversed log variable to disk
+    # done because awk can not work with variables only with files
+    printf "%s" "$varReversed_DsmschedLog" > "$varReversedFilePath"
+    
+    # extract last backup progress from file in both languages
+    varOneDayLogGerman=$(awk '/--- ANFANG DER PLANUNGSPROTOKOLLABFRAGE/{a=1};a;/--- ANFANG DES PLANUNGSPROTOKOLLSTATUS/{exit}' "/Library/Preferences/Tivoli Storage Manager/dsmsched_reversed.log")
+    varOneDayLogEnglish=$(awk '/--- SCHEDULEREC QUERY BEGIN/{a=1};a;/--- SCHEDULEREC STATUS BEGIN/{exit}' "/Library/Preferences/Tivoli Storage Manager/dsmsched_reversed.log")
+    
+    # act according to the language found in the log file
+    # ---------------------------------------------------------------------------------------------------------------
+    # $varOneDayLogGerman is not empty so we found a german log entry
+    if [ "$varOneDayLogGerman" ]; then
+    
+    varBackUpDate=$(echo "$varOneDayLogGerman" | grep -e "--- ENDE DES PLANUNGSPROTOKOLLSTATUS" | awk '{ print $1 }')
+    varBackUpTime=$(echo "$varOneDayLogGerman" | grep -e "--- ENDE DES PLANUNGSPROTOKOLLSTATUS" | awk '{ print $2 }')
+    varNodeName=$(echo "$varOneDayLogGerman" | grep -e "Knotenname: " -e "Node Name: " | awk '{ print $4 }')
+    varObjectsBackedUp=$(echo "$varOneDayLogGerman" | grep -e "Gesamtzahl gesicherter Objekte" | awk '{ print $7 }')
+    varBytesTransferred=$(echo "$varOneDayLogGerman" | grep -e "Gesamtzahl übertragener Byte" | awk '{ print $7 }''{ print $8 }')
+    varElapsedProcessingTime=$(echo "$varOneDayLogGerman" | grep -e "Abgelaufene Verarbeitungszeit" | awk '{ print $6 }')
+    
+    fi
+    # ---------------------------------------------------------------------------------------------------------------
+    # $varOneDayLogEnglish is not empty so we found an english log entry
+    if [ "$varOneDayLogEnglish" ]; then
+    
+    varBackUpDate=$(echo "$varOneDayLogEnglish" | grep -e "--- SCHEDULEREC STATUS END" | awk '{ print $1 }')
+    varBackUpTime=$(echo "$varOneDayLogEnglish" | grep -e "--- SCHEDULEREC STATUS END" | awk '{ print $2 }')
+    varNodeName=$(echo "$varOneDayLogEnglish" | grep -e "Node Name: " -e "Node Name: " | awk '{ print $5 }')
+    varObjectsBackedUp=$(echo "$varOneDayLogEnglish" | grep -e "Total number of objects backed up:" | awk '{ print $9 }')
+    varBytesTransferred=$(echo "$varOneDayLogEnglish" | grep -e "Total number of bytes transferred:" | awk '{ print $8 }''{ print $9 }')
+    varElapsedProcessingTime=$(echo "$varOneDayLogEnglish" | grep -e "Elapsed processing time:" | awk '{ print $6 }')
+    
+    fi
+    # ---------------------------------------------------------------------------------------------------------------
+    
+    # in case there a multiple nodename entries use only one
+    set -- $varNodeName
+    varNodeName=$1
+    
+    
+    echo "<result>"
+    echo "Node: $varNodeName"
+    echo "Datum: $varBackUpDate" "Zeit: $varBackUpTime"
+    echo "Files gesichert: $varObjectsBackedUp"
+    echo "Transferiert:" $varBytesTransferred "Zeit: $varElapsedProcessingTime"
+    echo "</result>"
+    
+else
+    echo "<result>"IBM SP: Kein Log"</result>"
+fi
+
+exit 0
+
+
